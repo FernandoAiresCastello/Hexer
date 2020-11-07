@@ -1,0 +1,11 @@
+*.pro
+*.user
+*.vs
+*.log
+*.ilk
+*.pdb
+*.map
+*.dia
+*.dia~
+*.ini
+Debug
