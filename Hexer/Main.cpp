@@ -3,8 +3,9 @@
 
 using namespace TBRLGPT;
 
-std::string programTitle = "Hexer";
+std::string programName = "Hexer";
 std::string programVersion = "v0.1";
+std::string programTitle = programName + " " + programVersion;
 std::string settingsFile = "hexer.ini";
 
 bool programRunning = true;
@@ -91,12 +92,17 @@ void drawUi() {
 
 	Window* wTitle = new Window(e->Ui, 0, 0, g->Cols - 2, 1);
 	wTitle->Draw();
-	wTitle->Print(1, 0, programTitle);
-	wTitle->Print(73, 0, programVersion);
+	
+	int maxFilenameLength = g->Cols - 12;
+	std::string name = File::GetName(filename);
+	std::string abbrName = name.substr(0, maxFilenameLength - 6) + "...";
+	wTitle->Print(1, 0, name.length() < maxFilenameLength ? name : abbrName);
+
+	std::string range = String::Format("0x%08X", fileLength - 1);
+	wTitle->Print(g->Cols - range.length() - 3, 0, range);
+
 	Window* wBottom = new Window(e->Ui, 0, 36, g->Cols - 2, 2);
 	wBottom->Draw();
-	wBottom->Print(1, 0, File::GetName(filename));
-	wBottom->Print(1, 1, String::Format("%i bytes", fileLength));
 
 	delete wTitle;
 	delete wBottom;
@@ -123,19 +129,19 @@ Bookmark* getBookmark(int address) {
 
 void printCurrentView() {
 	int lineX = 4;
+	int firstLineY = 4;
 	int address = topAddress;
 
-	p->Locate(lineX + 9, 3);
+	p->Locate(lineX + 9, firstLineY - 1);
 	setColors(addrForeColor, addrBackColor);
 	p->Print("00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
 
-	p->Locate(lineX, 4);
+	p->Locate(lineX, firstLineY);
 	for (int line = 0; line < maxLines; line++) {
 		setColors(addrForeColor, addrBackColor);
 		p->Print(String::Format("%08X ", address));
 		for (int offset = 0; offset < bytesPerLine; offset++) {
 			int ptr = address + offset;
-
 			Bookmark* b = getBookmark(ptr);
 			if (b != NULL) {
 				setColors(b->foreColor, b->backColor);
@@ -143,18 +149,69 @@ void printCurrentView() {
 			else {
 				setColors(bytesForeColor, bytesBackColor);
 			}
-
 			p->Print(String::Format("%02X ", file[ptr]));
 		}
 		for (int offset = 0; offset < bytesPerLine; offset++) {
-			setColors(charsForeColor, charsBackColor);
-			p->PutChar(file[address + offset]);
+			int ptr = address + offset;
+			Bookmark* b = getBookmark(ptr);
+			if (b != NULL) {
+				setColors(b->foreColor, b->backColor);
+			}
+			else {
+				setColors(charsForeColor, charsBackColor);
+			}
+			p->PutChar(file[ptr]);
 		}
 		p->Locate(lineX, p->GetCursorY() + 1);
 		address += bytesPerLine;
 	}
 
-	e->Gr->Update();
+	g->Update();
+}
+
+void printHelpCommand(std::string key, std::string command) {
+	p->SetColor(0x808080, defaultBackColor);
+	p->Locate(2, p->GetCursorY());
+	p->Print(key);
+	p->SetColor(defaultTextColor, defaultBackColor);
+	p->Locate(12, p->GetCursorY());
+	p->Print(command + "\n");
+}
+
+void showHelp() {
+	setColors(defaultTextColor, defaultBackColor);
+	p->Clear();
+
+	Window* wTitle = new Window(e->Ui, 0, 0, g->Cols - 2, 1);
+	wTitle->Draw();
+	wTitle->Print(1, 0, "Help");
+	wTitle->Print(g->Cols - programTitle.length() - 3, 0, programTitle);
+
+	p->Locate(1, 4);
+	printHelpCommand("F1", "Help");
+	printHelpCommand("CTRL+Q", "Quit");
+	printHelpCommand("CTRL+O", "Open file");
+	printHelpCommand("ESC", "Cancel");
+	printHelpCommand("DOWN", "Scroll down / cursor down");
+	printHelpCommand("UP", "Scroll up / cursor up");
+	printHelpCommand("RIGHT", "Cursor right");
+	printHelpCommand("LEFT", "Cursor left");
+	printHelpCommand("PGDOWN", "Scroll to next page");
+	printHelpCommand("PGUP", "Scroll to previous page");
+	printHelpCommand("HOME", "Scroll to first address");
+	printHelpCommand("END", "Scroll to last address");
+	printHelpCommand("ALT+ENTER", "Toggle fullscreen");
+	//printHelpCommand("CTRL+E", "Toggle edit mode");
+	//printHelpCommand("CTRL+B", "Bookmarks");
+	
+	Window* wBottom = new Window(e->Ui, 0, 36, g->Cols - 2, 2);
+	wBottom->Draw();
+	wBottom->Print(1, 0, "Press any key to return...");
+
+	g->Update();
+	Key::WaitAny();
+	delete wTitle;
+	delete wBottom;
 }
 
 void keyPressed(SDL_Keycode key) {
@@ -191,6 +248,9 @@ void keyPressed(SDL_Keycode key) {
 	case SDLK_END:
 		topAddress = fileLength - maxLines * bytesPerLine;
 		break;
+	case SDLK_F1:
+		showHelp();
+		break;
 	case SDLK_q:
 		if (Key::Ctrl()) {
 			programRunning = false;
@@ -199,6 +259,11 @@ void keyPressed(SDL_Keycode key) {
 	case SDLK_o:
 		if (Key::Ctrl()) {
 			selectFile();
+		}
+		break;
+	case SDLK_RETURN:
+		if (Key::Alt()) {
+			g->ToggleFullscreen();
 		}
 		break;
 	default:
@@ -210,7 +275,7 @@ int main(int argc, char* args[]) {
 	initSettings();
 	initWindow();
 	selectFile();
-	//addBookmark("test", 0x101, 0x10e, 0xff8000, defaultBackColor);
+	//addBookmark("test", 0x103, 0x11a, 0xff8000, defaultBackColor);
 	
 	while (file != NULL && programRunning) {
 		drawUi();
